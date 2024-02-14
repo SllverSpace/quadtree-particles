@@ -12,38 +12,67 @@ var gs = [
     // [-1, -1, -1]
 ]
 
-for (let i = 0; i < 10; i++) {
+let tseed = 0
+
+function srand(seed) {
+    return function() {
+        let x = Math.sin(seed*3902+7459)*Math.cos(seed*4092+4829)*10000
+        seed += 1
+	    return x - Math.floor(x)
+    }
+}
+
+let rng = srand(78738473)
+let colours = 100
+
+for (let i = 0; i < colours; i++) {
     let g = []
-    for (let j = 0; j < 10; j++) {
-        g.push(Math.random()*2-1)
+    for (let j = 0; j < colours; j++) {
+        g.push(Math.round(rng())*2-1)
     }
     gs.push(g)
 }
 
-let minx = -1000
-let miny = -1000
-let maxx = 1000
-let maxy = 1000
+var useQuadtree = true
 
+var spawnRange = 25000
+
+let minx = -spawnRange/2
+let miny = -spawnRange/2
+let maxx = spawnRange/2
+let maxy = spawnRange/2
+
+var ticks = 0
+var targetTicks = 0
+
+var timewarp = false
+var debug = false
+var debug2 = false
+var debug3 = false
+
+var fetchRange = 1000
 
 var fps = 0
+var tps = 0
+var fps2 = 0
+var tps2 = 0
 var found = []
-var quadtree = new Quadtree(0, 0, 2000, 2000)
+var quadtree = new Quadtree(0, 0, spawnRange, spawnRange)
 var particles = []
-for (let i = 0; i < 100; i++) {
-    let p = new Point(Math.random()*2000-1000, Math.random()*2000-1000, i, Math.floor(Math.random()*gs.length))
+for (let i = 0; i < 25000; i++) {
+    let p = new Point(rng()*spawnRange-spawnRange/2, rng()*spawnRange-spawnRange/2, i, Math.floor(rng()*gs.length))
     quadtree.insert(p)
     particles.push(p)
 }
 
-var camera = {x: 0, y: 0, zoom: 1}
+var camera = {x: 0, y: 0, zoom: 0.5}
 
 function tsc(x, y) {
     return [(x-camera.x)*camera.zoom+canvas.width/2, (y-camera.y)*camera.zoom+canvas.height/2]
 }
 
 function force(r, a) {
-    let beta = 0.2
+    let beta = 0.05
 	if (r < beta) {
 		return r / beta - 1
 	} else if (beta < r && r < 1) {
@@ -54,26 +83,37 @@ function force(r, a) {
 }
 
 function tick() {
-    let rMax = 80
     let forceFactor = 10
-    let frictionHalfLife = 0.1
-    let dt = 0.06
+    let frictionHalfLife = 0.040
+    let dt = 0.02
+    let rMax = 500
     let frictionFactor = Math.pow(0.5, dt / frictionHalfLife)
 
-    if (mouse.ldown) {
-        let i = Math.floor(Math.random()*particles.length)
-        particles[i].x = (mouse.x-canvas.width/2)/camera.zoom + camera.x
-        particles[i].y = (mouse.y-canvas.height/2)/camera.zoom + camera.y
-    }
+    // if (mouse.ldown) {
+    //     let i = Math.floor(Math.random()*particles.length)
+    //     particles[i].x = (mouse.x-canvas.width/2)/camera.zoom + camera.x
+    //     particles[i].y = (mouse.y-canvas.height/2)/camera.zoom + camera.y
+    // }
 
-    let collapse = 0.999
-    minx *= collapse
-    miny *= collapse
-    maxx *= collapse
-    maxy *= collapse
+    let midx = minx + (maxx-minx)/2
+    let midy = miny + (maxy-miny)/2
+
+
+    let collapse = 0.001
+
+    // minx += (midx - minx) * collapse
+    // maxx += (midx - maxx) * collapse
+    // miny += (midy - miny) * collapse
+    // maxy += (midy - maxy) * collapse
+
+    
+    minx *= (1-collapse)
+    miny *= (1-collapse)
+    maxx *= (1-collapse)
+    maxy *= (1-collapse)
 
     for (let p of particles) {
-        let p2s = quadtree.getPoints(p.x, p.y, 160, 160)
+        let p2s = p.getQt().getPoints(p.x, p.y, fetchRange, fetchRange)
         let tx = 0
         let ty = 0
         for (let p2 of p2s) {
@@ -93,6 +133,8 @@ function tick() {
         p.vy *= frictionFactor
         p.vx += tx * dt
         p.vy += ty * dt
+        p.lx = p.x
+        p.ly = p.y
 
         if (p.x < minx) {p.x = minx}
         if (p.x > maxx) {p.x = maxx}
@@ -121,8 +163,7 @@ function tick() {
 }
 
 var accumulator = 0
-var tps = 20
-var tDelta = 1/tps
+var tDelta = 1/20
 
 function update(timestamp) {
     requestAnimationFrame(update)
@@ -157,24 +198,53 @@ function update(timestamp) {
         camera.x += 500*delta / camera.zoom
     }
 
+    if (jKeys["ArrowRight"]) {
+        targetTicks = ticks+100
+    }
+
+    if (jKeys["KeyT"]) {
+        timewarp = !timewarp
+    }
+    if (jKeys["KeyZ"]) {
+        debug = !debug
+    }
+    if (jKeys["KeyX"]) {
+        debug2 = !debug2
+    }
+    if (jKeys["KeyC"]) {
+        debug3 = !debug3
+    }
+    if (jKeys["KeyQ"]) {
+        useQuadtree = !useQuadtree
+    }
+
     accumulator += delta
     let startTime = new Date().getTime()
-    while ((accumulator > tDelta || keys["KeyT"]) && new Date().getTime() - startTime < Math.min(1000/60, 1000*delta)) {
+    while ((accumulator > tDelta || timewarp || ticks < targetTicks) && new Date().getTime() - startTime < Math.min(1000/60/2, 1000*delta/2)) {
         tick()
+        ticks += 1
+        tps += 1
         accumulator -= tDelta
     }
-    if (keys["KeyT"]) {
+    while (accumulator > tDelta) accumulator -= tDelta
+    if (timewarp || ticks < targetTicks) {
         accumulator = 0
     }
 
     quadtree.draw()
 
+    ui.text(5*su, 35/2*su, 35*su, "FPS: "+fps2)
+    ui.text(5*su, (35/2+35)*su, 35*su, "TPS: "+tps2)
+
     input.updateInput()
 }
 
 setInterval(() => {
-    console.log(fps)
+    console.log(fps, tps)
+    fps2 = fps
+    tps2 = tps
     fps = 0
+    tps = 0
 }, 1000)
 
 requestAnimationFrame(update)
