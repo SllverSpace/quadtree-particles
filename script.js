@@ -22,8 +22,8 @@ function srand(seed) {
     }
 }
 
-let rng = srand(78738473)
-let colours = 100
+let rng = srand(Math.random()*1000000000)
+let colours = 10
 
 for (let i = 0; i < colours; i++) {
     let g = []
@@ -35,7 +35,7 @@ for (let i = 0; i < colours; i++) {
 
 var useQuadtree = true
 
-var spawnRange = 25000
+var spawnRange = 5000
 
 let minx = -spawnRange/2
 let miny = -spawnRange/2
@@ -50,7 +50,9 @@ var debug = false
 var debug2 = false
 var debug3 = false
 
-var fetchRange = 1000
+var fetchRange = 200
+
+var drawTime = 0
 
 var fps = 0
 var tps = 0
@@ -59,7 +61,7 @@ var tps2 = 0
 var found = []
 var quadtree = new Quadtree(0, 0, spawnRange, spawnRange)
 var particles = []
-for (let i = 0; i < 25000; i++) {
+for (let i = 0; i < 5000; i++) {
     let p = new Point(rng()*spawnRange-spawnRange/2, rng()*spawnRange-spawnRange/2, i, Math.floor(rng()*gs.length))
     quadtree.insert(p)
     particles.push(p)
@@ -72,7 +74,7 @@ function tsc(x, y) {
 }
 
 function force(r, a) {
-    let beta = 0.05
+    let beta = 0.2
 	if (r < beta) {
 		return r / beta - 1
 	} else if (beta < r && r < 1) {
@@ -86,7 +88,7 @@ function tick() {
     let forceFactor = 10
     let frictionHalfLife = 0.040
     let dt = 0.02
-    let rMax = 500
+    let rMax = 100
     let frictionFactor = Math.pow(0.5, dt / frictionHalfLife)
 
     // if (mouse.ldown) {
@@ -99,7 +101,7 @@ function tick() {
     let midy = miny + (maxy-miny)/2
 
 
-    let collapse = 0.001
+    let collapse = 0
 
     // minx += (midx - minx) * collapse
     // maxx += (midx - maxx) * collapse
@@ -112,12 +114,16 @@ function tick() {
     maxx *= (1-collapse)
     maxy *= (1-collapse)
 
+    let currenti = 0
     for (let p of particles) {
+        if (currenti < particlei) {
+            currenti += 1
+            continue
+        }
         let p2s = p.getQt().getPoints(p.x, p.y, fetchRange, fetchRange)
         let tx = 0
         let ty = 0
         for (let p2 of p2s) {
-            let g = gs[p.type][p2.type]
             let dx = p2.x - p.x
             let dy = p2.y - p.y
             let d = Math.sqrt(dx**2 + dy**2)
@@ -135,24 +141,38 @@ function tick() {
         p.vy += ty * dt
         p.lx = p.x
         p.ly = p.y
-
-        if (p.x < minx) {p.x = minx}
-        if (p.x > maxx) {p.x = maxx}
-        if (p.y < miny) {p.y = miny}
-        if (p.y > maxy) {p.y = maxy}
+        
+        if (new Date().getTime() - startTime >= Math.min(1000/60, 1000*delta)) {
+            particlei = currenti
+            stopFrame = true
+            return
+        }
+        currenti++
+        
+        // if (p.x < minx) {p.x = minx}
+        // if (p.x > maxx) {p.x = maxx}
+        // if (p.y < miny) {p.y = miny}
+        // if (p.y > maxy) {p.y = maxy}
     }
+
+    particlei = 0
 
     for (let p of particles) {
         p.x += p.vx*dt
         p.y += p.vy*dt
 
-        // p.vx -= p.x*dt
-        // p.vy -= p.y*dt
+        p.vx -= p.x*dt / spawnRange
+        p.vy -= p.y*dt / spawnRange
 
-        if (p.x < minx) {minx = p.x; p.vx *= -1}
-        if (p.x > maxx) {maxx = p.x; p.vx *= -1}
-        if (p.y < miny) {miny = p.y; p.vy *= -1}
-        if (p.y > maxy) {maxy = p.y; p.vy *= -1}
+        if (p.x < minx) minx = p.x
+        if (p.x > maxx) maxx = p.x
+        if (p.y < miny) miny = p.y
+        if (p.y > maxy) maxy = p.y
+
+        // if (p.x < minx) {minx = p.x; p.vx *= -1}
+        // if (p.x > maxx) {maxx = p.x; p.vx *= -1}
+        // if (p.y < miny) {miny = p.y; p.vy *= -1}
+        // if (p.y > maxy) {maxy = p.y; p.vy *= -1}
     }
 
     quadtree = new Quadtree(minx + (maxx-minx)/2, miny + (maxy-miny)/2, maxx-minx, maxy-miny)
@@ -164,6 +184,11 @@ function tick() {
 
 var accumulator = 0
 var tDelta = 1/20
+var realTDelta = 1/20
+var particlei = 0
+var startTime = 0
+var stopFrame = false
+var ticked = false
 
 function update(timestamp) {
     requestAnimationFrame(update)
@@ -219,19 +244,26 @@ function update(timestamp) {
     }
 
     accumulator += delta
-    let startTime = new Date().getTime()
-    while ((accumulator > tDelta || timewarp || ticks < targetTicks) && new Date().getTime() - startTime < Math.min(1000/60/2, 1000*delta/2)) {
+    startTime = new Date().getTime()
+    stopFrame = false
+    ticked = true
+    while ((accumulator > tDelta || timewarp || ticks < targetTicks)) {
         tick()
-        ticks += 1
-        tps += 1
-        accumulator -= tDelta
+        ticked = true
+        if (stopFrame) {break} else {
+            ticks += 1
+            tps += 1
+            accumulator -= tDelta
+        }
     }
-    while (accumulator > tDelta) accumulator -= tDelta
+    while (accumulator > tDelta && !stopFrame) accumulator -= tDelta
     if (timewarp || ticks < targetTicks) {
         accumulator = 0
     }
 
+    startTime = new Date().getTime()
     quadtree.draw()
+    drawTime = new Date().getTime() - startTime
 
     ui.text(5*su, 35/2*su, 35*su, "FPS: "+fps2)
     ui.text(5*su, (35/2+35)*su, 35*su, "TPS: "+tps2)
@@ -241,6 +273,7 @@ function update(timestamp) {
 
 setInterval(() => {
     console.log(fps, tps)
+    realTDelta = 1/tps
     fps2 = fps
     tps2 = tps
     fps = 0
