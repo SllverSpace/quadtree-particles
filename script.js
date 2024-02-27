@@ -35,7 +35,7 @@ for (let i = 0; i < colours; i++) {
 
 var useQuadtree = true
 
-var spawnRange = 5000
+var spawnRange = 1000
 
 let minx = -spawnRange/2
 let miny = -spawnRange/2
@@ -61,7 +61,7 @@ var tps2 = 0
 var found = []
 var quadtree = new Quadtree(0, 0, spawnRange, spawnRange)
 var particles = []
-for (let i = 0; i < 5000; i++) {
+for (let i = 0; i < 1000; i++) {
     let p = new Point(rng()*spawnRange-spawnRange/2, rng()*spawnRange-spawnRange/2, i, Math.floor(rng()*gs.length))
     quadtree.insert(p)
     particles.push(p)
