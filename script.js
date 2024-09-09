@@ -139,8 +139,6 @@ function tick() {
         p.vy *= frictionFactor
         p.vx += tx * dt
         p.vy += ty * dt
-        p.lx = p.x
-        p.ly = p.y
         
         if (new Date().getTime() - startTime >= Math.min(1000/60, 1000*delta)) {
             particlei = currenti
@@ -158,6 +156,9 @@ function tick() {
     particlei = 0
 
     for (let p of particles) {
+        p.lx = p.x
+        p.ly = p.y
+
         p.x += p.vx*dt
         p.y += p.vy*dt
 
@@ -229,6 +230,10 @@ function update(timestamp) {
 
     if (jKeys["KeyT"]) {
         timewarp = !timewarp
+        if (!timewarp) {
+            tps = 0
+            tps2 = 20
+        }
     }
     if (jKeys["KeyZ"]) {
         debug = !debug
@@ -253,11 +258,11 @@ function update(timestamp) {
         if (stopFrame) {break} else {
             ticks += 1
             tps += 1
-            accumulator -= tDelta
+            while (accumulator > tDelta) accumulator -= tDelta
         }
     }
     while (accumulator > tDelta && !stopFrame) accumulator -= tDelta
-    if (timewarp || ticks < targetTicks) {
+    if (timewarp) {
         accumulator = 0
     }
 

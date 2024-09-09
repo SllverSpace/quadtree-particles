@@ -37,7 +37,7 @@ class Point {
         return qt
     }
     draw() {
-        let amt = accumulator / tDelta
+        let amt = Math.max(0, Math.min(1, accumulator / (1/tps2)))
 
         this.vix = this.x * amt + this.lx * (1 - amt)
         this.viy = this.y * amt + this.ly * (1 - amt)
